@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>student-work-tracker-v031</title>
+<title>student-work-tracker-v033</title>
 <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 <style>
@@ -14,8 +14,8 @@
 <body>
 <div class="app">
 <header>
-<h1>アルバイト時間記録 v031</h1>
-<div class="small">週表示（日曜〜土曜）。Excel共有・3週間PDF共有・limits.csv対応。v031では学生情報とアルバイト内容もExcelへ出力します。期間内のアルバイトを自動表示します。</div>
+<h1>アルバイト時間記録 v033</h1>
+<div class="small">週表示（日曜〜土曜）。Excel共有・3週間PDF共有・limits.csv対応。v032ではExcelを常に全データ出力にします。PDFは表示週＋前2週間です。</div>
 <div class="bar"><button class="btn light" id="prevWeek">＜ 前週</button><div class="weekLabel" id="weekLabel"></div><button class="btn light" id="nextWeek">次週 ＞</button><button class="btn secondary" id="todayBtn">今週</button></div>
 </header>
 <details class="card" id="studentDetails"><summary><span class="summaryRow">学生情報</span></summary><div class="collapseBody"><div class="small">学生名・学籍番号・クラスは最初に1回だけ入力します。</div><div class="grid" style="margin-top:8px"><div><label>学生名</label><input id="studentName" placeholder="例：山田 太郎"></div><div><label>学籍番号</label><input id="studentId" placeholder="例：A001"></div></div><div style="margin-top:10px"><label>クラス</label><input id="studentClass" placeholder="例：初級A"></div></div></details>
@@ -26,9 +26,9 @@
 </div>
 <div class="footer"><button class="btn" id="shareExcelBtn">Excelを共有</button><button class="btn secondary" id="sharePdfBtn">直近3週間PDFを共有</button><button class="btn light" id="saveBtn">保存</button></div>
 <script>
-const VERSION='v031';
-const KEY='student-work-tracker-v031';
-const OLD_KEYS=['student-work-tracker-v030','student-work-tracker-v029','student-work-tracker-v028','student-work-tracker-v027','student-work-tracker-v026','student-work-tracker-v025','student-work-tracker-v024','student-work-tracker-v023','student-work-tracker-v022','student-work-tracker-v021','student-work-tracker-v020','student-work-tracker-v019','student-work-tracker-v018'];
+const VERSION='v033';
+const KEY='student-work-tracker-v033';
+const OLD_KEYS=['student-work-tracker-v032','student-work-tracker-v031','student-work-tracker-v030','student-work-tracker-v029','student-work-tracker-v028','student-work-tracker-v027','student-work-tracker-v026','student-work-tracker-v025','student-work-tracker-v024','student-work-tracker-v023','student-work-tracker-v022','student-work-tracker-v021','student-work-tracker-v020','student-work-tracker-v019','student-work-tracker-v018'];
 const jpWeek=['日','月','火','水','木','金','土'];
 function iso(d){return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10)}
 function parseDate(s){const [y,m,d]=String(s).split('-').map(Number);return new Date(y,m-1,d)}
@@ -74,6 +74,11 @@ function setBlankToNone(ds){activeJobIndexes(ds).forEach(ji=>{const w=getWorkFor
 function getPeriod(){const a=document.getElementById('bulkStart').value,b=document.getElementById('bulkEnd').value;if(!a||!b){alert('期間を選んでください');return null}if(a>b){alert('終了日は開始日以後にしてください');return null}return[a,b]}
 function rows(a,b){const out=[];for(let d=parseDate(a);iso(d)<=b;d=addDays(d,1)){const ds=iso(d);const jobSet=new Set(activeJobIndexes(ds));ensureDay(ds).works.forEach(w=>{normalizeWork(w);if(w.status==='work'&&w.jobIndex!==null)jobSet.add(Number(w.jobIndex))});Array.from(jobSet).sort((x,y)=>x-y).forEach(ji=>{const w=getWorkForJob(ds,ji),h=(w.status==='work'&&typeof w.hours==='number')?w.hours:0,s7=sevenHours(ds),lim=limit(ds);out.push({date:ds,week:jpWeek[d.getDay()],jobNo:ji+1,name:jobLabel(ji),content:(state.jobs[ji]&&state.jobs[ji].content)||'',status:w.status,statusJa:w.status==='work'?'あり':(w.status==='none'?'なし':'未入力'),start:w.start||'',end:w.end||'',breakMin:w.breakMin??0,hours:h,sum7:s7,limit:lim,judge:judge(s7,lim)})})}return out}
 function weekRangeAroundCurrent(){return[state.currentWeekStart,weekEndFromStart(state.currentWeekStart)]}
+function allDataRange(){
+  const dates=Object.keys(state.days||{}).filter(ds=>/^\d{4}-\d{2}-\d{2}$/.test(ds)).sort();
+  if(dates.length===0)return weekRangeAroundCurrent();
+  return [dates[0],dates[dates.length-1]];
+}
 function threeWeekRange(){return[iso(addDays(parseDate(state.currentWeekStart),-14)),weekEndFromStart(state.currentWeekStart)]}
 function fileNameBase(a,b){return 'arbeit_'+VERSION+'_'+(state.student.id||'noid')+'_'+a+'_'+b}
 function buildWorkbook(a,b){
@@ -95,7 +100,7 @@ function buildWorkbook(a,b){
 
   // 勤務記録シート
   const data=[['日付','曜日','アルバイト番号','アルバイト名','アルバイト内容','状態','開始','終了','休み時間分','労働時間','直近7日間合計','上限','判定']];
-  rows(a,b).forEach(r=>data.push([r.date,r.week,r.jobNo,r.name,r.content||'',r.statusJa,r.start,r.end,r.breakMin,r.status==='work'?Number(r.hours.toFixed(1)):'',Number(r.sum7.toFixed(1)),r.limit,r.judge]));
+  rows(a,b).forEach(r=>data.push([r.date,r.week,r.jobNo,r.name,r.content||'',r.statusJa,r.start,r.end,r.breakMin,r.status==='work'?Number(r.hours.toFixed(1)):(r.status==='none'?0:''),Number(r.sum7.toFixed(1)),r.limit,r.judge]));
   const ws=XLSX.utils.aoa_to_sheet(data);
   ws['!cols']=[{wch:12},{wch:5},{wch:12},{wch:20},{wch:24},{wch:8},{wch:8},{wch:8},{wch:12},{wch:10},{wch:14},{wch:8},{wch:8}];
   const headerStyle={font:{bold:true,color:{rgb:'FFFFFF'}},fill:{fgColor:{rgb:'6B6259'}},alignment:{horizontal:'center'}};
@@ -132,8 +137,8 @@ async function shareBlob(blob,filename,title){
     throw e;
   }
 }
-async function shareExcel(){try{updateStateFromInputs();save();const[a,b]=weekRangeAroundCurrent();const wb=buildWorkbook(a,b);const arr=XLSX.write(wb,{bookType:'xlsx',type:'array'});const blob=new Blob([arr],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});await shareBlob(blob,fileNameBase(a,b)+'.xlsx','アルバイト時間記録Excel')}catch(e){alert('Excel作成に失敗しました：'+e.message)}}
-async function sharePdf(){try{updateStateFromInputs();save();if(!window.jspdf||!window.jspdf.jsPDF)throw new Error('PDF作成ライブラリを読み込めませんでした。');const[a,b]=threeWeekRange();const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});doc.setFont('helvetica');doc.setFontSize(12);doc.text(`Arbeit record ${VERSION}  ${a} - ${b}`,10,10);doc.setFontSize(9);doc.text(`Student: ${state.student.name||''}  ID: ${state.student.id||''}  Class: ${state.student.className||''}`,10,16);const rs=rows(a,b);let y=24;const headers=['Date','Job','Status','Start','End','Break','Hours','7days','Limit','Judge'];const widths=[25,48,16,17,17,17,17,20,16,18];function pageHeader(){let x=8;doc.setFillColor(220,220,220);doc.rect(8,y,276,6,'F');headers.forEach((h,i)=>{doc.text(String(h),x+1,y+4);x+=widths[i]});y+=6}function row(vals,fill){if(y>190){doc.addPage();y=12;pageHeader()}let x=8;doc.setFillColor(fill[0],fill[1],fill[2]);doc.rect(8,y,276,6,'F');doc.setTextColor(0,0,0);vals.forEach((v,i)=>{let t=String(v??'');if(i===1&&t.length>18)t=t.slice(0,18);doc.text(t,x+1,y+4);x+=widths[i]});y+=6}pageHeader();rs.forEach(r=>{const fill=r.judge==='超過'?[255,199,206]:(r.judge==='注意'?[255,235,156]:[255,255,255]);row([r.date,r.name,r.statusJa,r.start,r.end,r.breakMin,r.status==='work'?r.hours.toFixed(1):'',r.sum7.toFixed(1),r.limit,r.judge],fill)});const blob=doc.output('blob');await shareBlob(blob,fileNameBase(a,b)+'_3weeks.pdf','アルバイト時間記録PDF')}catch(e){alert('PDF作成に失敗しました：'+e.message)}}
+async function shareExcel(){try{updateStateFromInputs();save();const[a,b]=allDataRange();const wb=buildWorkbook(a,b);const arr=XLSX.write(wb,{bookType:'xlsx',type:'array'});const blob=new Blob([arr],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});await shareBlob(blob,fileNameBase(a,b)+'.xlsx','アルバイト時間記録Excel')}catch(e){alert('Excel作成に失敗しました：'+e.message)}}
+async function sharePdf(){try{updateStateFromInputs();save();if(!window.jspdf||!window.jspdf.jsPDF)throw new Error('PDF作成ライブラリを読み込めませんでした。');const[a,b]=threeWeekRange();const{jsPDF}=window.jspdf;const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});doc.setFont('helvetica');doc.setFontSize(12);doc.text(`Arbeit record ${VERSION}  ${a} - ${b}`,10,10);doc.setFontSize(9);doc.text(`Student: ${state.student.name||''}  ID: ${state.student.id||''}  Class: ${state.student.className||''}`,10,16);const rs=rows(a,b);let y=24;const headers=['Date','Job','Status','Start','End','Break','Hours','7days','Limit','Judge'];const widths=[25,48,16,17,17,17,17,20,16,18];function pageHeader(){let x=8;doc.setFillColor(220,220,220);doc.rect(8,y,276,6,'F');headers.forEach((h,i)=>{doc.text(String(h),x+1,y+4);x+=widths[i]});y+=6}function row(vals,fill){if(y>190){doc.addPage();y=12;pageHeader()}let x=8;doc.setFillColor(fill[0],fill[1],fill[2]);doc.rect(8,y,276,6,'F');doc.setTextColor(0,0,0);vals.forEach((v,i)=>{let t=String(v??'');if(i===1&&t.length>18)t=t.slice(0,18);doc.text(t,x+1,y+4);x+=widths[i]});y+=6}pageHeader();rs.forEach(r=>{const fill=r.judge==='超過'?[255,199,206]:(r.judge==='注意'?[255,235,156]:[255,255,255]);row([r.date,r.name,r.statusJa,r.start,r.end,r.breakMin,r.status==='work'?r.hours.toFixed(1):(r.status==='none'?'0':''),r.sum7.toFixed(1),r.limit,r.judge],fill)});const blob=doc.output('blob');await shareBlob(blob,fileNameBase(a,b)+'_3weeks.pdf','アルバイト時間記録PDF')}catch(e){alert('PDF作成に失敗しました：'+e.message)}}
 function createSampleData(){
 if(!confirm('現在の入力データをサンプルデータで上書きします。よろしいですか？'))return;
 state=JSON.parse(JSON.stringify(initial));

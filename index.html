@@ -258,7 +258,19 @@ async function shareBlobOrOpen(blob,filename,title,label){
 }
 
 
-function saveBlobForBackup(blob,filename){
+async function saveBlobForBackup(blob,filename){
+  const file=new File([blob],filename,{type:blob.type});
+  try{
+    const shareData={files:[file],title:' ',text:'Back up data'};
+    if(navigator.canShare && navigator.canShare(shareData)){
+      await navigator.share(shareData);
+      return true;
+    }
+  }catch(e){
+    console.warn('backup share failed',e);
+    alert('ERROR');
+    throw e;
+  }
   try{
     const url=URL.createObjectURL(blob);
     const a=document.createElement('a');
@@ -268,8 +280,7 @@ function saveBlobForBackup(blob,filename){
     a.click();
     a.remove();
     setTimeout(()=>URL.revokeObjectURL(url),1500);
-    alert('保存しました');
-    return true;
+    return false;
   }catch(e){
     console.warn('backup save failed',e);
     alert('ERROR');
@@ -294,7 +305,7 @@ function validateJobCloseDays(){
 }
 
 async function shareExcel(){try{updateStateFromInputs();if(!validateJobCloseDays())return;save();const[a,b]=allDataRangeForSubmit();const wb=buildWorkbook(a,b);const arr=XLSX.write(wb,{bookType:'xlsx',type:'array'});const blob=new Blob([arr],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});await shareBlob(blob,fileNameBase(a,b)+'.xlsx')}catch(e){alert('Excel作成に失敗しました：'+e.message)}}
-async function backupExcel(){const status=document.getElementById('backupStatus');try{updateStateFromInputs();if(!validateJobCloseDays())return;save();if(status)status.textContent='バックアップ：作成中...';const[a,b]=allDataRange();const wb=buildWorkbook(a,b);const arr=XLSX.write(wb,{bookType:'xlsx',type:'array'});const blob=new Blob([arr],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});saveBlobForBackup(blob,'backup_'+fileNameBase(a,b)+'.xlsx');if(status)status.textContent='保存しました'}catch(e){if(status)status.textContent='ERROR';console.warn('backup failed',e);}}
+async function backupExcel(){const status=document.getElementById('backupStatus');try{updateStateFromInputs();if(!validateJobCloseDays())return;save();if(status)status.textContent='バックアップ：作成中...';const[a,b]=allDataRange();const wb=buildWorkbook(a,b);const arr=XLSX.write(wb,{bookType:'xlsx',type:'array'});const blob=new Blob([arr],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});await saveBlobForBackup(blob,'backup_'+fileNameBase(a,b)+'.xlsx');if(status)status.textContent=''}catch(e){if(status)status.textContent='ERROR';console.warn('backup failed',e);}}
 function formatJpDate(ds){
   const d=parseDate(ds);
   return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}（${jpWeek[d.getDay()]}）`;
